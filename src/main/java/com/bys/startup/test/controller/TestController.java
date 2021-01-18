@@ -1,4 +1,4 @@
-package com.example.demo.fruit.controller;
+package com.bys.startup.test.controller;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -10,7 +10,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
 @Controller
-public class SampleController {
+public class TestController {
 	
 	Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -28,7 +28,8 @@ public class SampleController {
 
 		model.addAttribute("fruit", fruitMap);
 
-		return "sample/sample";
+		return "views/test/test";
+		// return template/views/test/test.html
 	}
 
 }
