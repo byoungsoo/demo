@@ -1,4 +1,4 @@
-package com.bys.startup.test.controller;
+package com.bys.demo.board.controller;
 
 import java.util.HashMap;
 import java.util.List;
@@ -6,28 +6,32 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.servlet.ModelAndView;
 
-import com.bys.startup.test.vo.TestVo;
+import com.bys.demo.board.domain.BoardDTO;
+import com.bys.demo.board.service.BoardService;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Controller
-public class TestController {
+public class BoardController {
 	
-	Logger logger = LoggerFactory.getLogger(this.getClass());
-
+    private BoardService testService;
+	
 	@GetMapping("/test")
 	public String getFruit(Model model) {
 		Map<String, String> fruitMap = new HashMap<String, String>();
-
 		fruitMap.put("fruit1", "apple");
-		logger.info("info test");
+		log.info("info test");
 		fruitMap.put("fruit2", "kiwi");
-		logger.debug("debug test");
+		log.debug("debug test");
 		fruitMap.put("fruit3", "orange");
-		logger.info("info test2");
+		log.info("info test2");
 		
 
 		model.addAttribute("fruit", fruitMap);
@@ -36,14 +40,14 @@ public class TestController {
 		// return template/views/test/test.html
 	}
 	
-	
+	@GetMapping("/test1")
 	public ModelAndView test() throws Exception{
-	    ModelAndView mav = new ModelAndView("test");
+	    ModelAndView mv = new ModelAndView("views/test/test1");
+	    
+//		List<TestVo> testList = testService.selectTest();
+//	    mv.addObject("list", testList);
 
-	    List<TestVo> testList = testService.selectTest();
-	    mav.addObject("list", testList);
-
-	    return mav;
+	    return mv;
 	}
 
 		
