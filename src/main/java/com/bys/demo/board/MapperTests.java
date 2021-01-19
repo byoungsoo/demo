@@ -1,8 +1,11 @@
 package com.bys.demo.board;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.util.CollectionUtils;
 
 import com.bys.demo.board.domain.BoardDTO;
 import com.bys.demo.board.mapper.BoardMapper;
@@ -84,5 +87,24 @@ class MapperTests {
 			}
 		}
 	}
+	
+	
+	@Test
+	public void testSelectList() {
+		int boardTotalCount = boardMapper.selectBoardTotalCount();
+		if (boardTotalCount > 0) {
+			List<BoardDTO> boardList = boardMapper.selectBoardList();
+			if (CollectionUtils.isEmpty(boardList) == false) {
+				for (BoardDTO board : boardList) {
+					System.out.println("=========================");
+					System.out.println(board.getTitle());
+					System.out.println(board.getContent());
+					System.out.println(board.getWriter());
+					System.out.println("=========================");
+				}
+			}
+		}
+	}
+	
 
 }

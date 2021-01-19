@@ -20,36 +20,26 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Controller
 public class BoardController {
-	
-    private BoardService testService;
-	
-	@GetMapping("/test")
-	public String getFruit(Model model) {
-		Map<String, String> fruitMap = new HashMap<String, String>();
-		fruitMap.put("fruit1", "apple");
-		log.info("info test");
-		fruitMap.put("fruit2", "kiwi");
-		log.debug("debug test");
-		fruitMap.put("fruit3", "orange");
-		log.info("info test2");
-		
 
-		model.addAttribute("fruit", fruitMap);
+	@Autowired
+	private BoardService boardService;
 
-		return "views/test/test";
-		// return template/views/test/test.html
+	
+	@GetMapping(value = "/board/write.do")
+	public String openBoardWrite(Model model) {
+
+		String title = "Title";
+		String content = "Contents";
+		String writer = "Tester";
+
+		model.addAttribute("title", title);
+		model.addAttribute("content", content);
+		model.addAttribute("writer", writer);
+
+		return "board/write";
 	}
 	
-	@GetMapping("/test1")
-	public ModelAndView test() throws Exception{
-	    ModelAndView mv = new ModelAndView("views/test/test1");
-	    
-//		List<TestVo> testList = testService.selectTest();
-//	    mv.addObject("list", testList);
-
-	    return mv;
-	}
-
-		
+	
+	
 
 }
