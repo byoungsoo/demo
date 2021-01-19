@@ -79,8 +79,8 @@
 	<!-- root레벨 설정 -->
 	<root level="${LOG_LEVEL}">
 		<appender-ref ref="CONSOLE" />
-		<appender-ref ref="FILE" />
-		<appender-ref ref="Error" />
+		<!-- <appender-ref ref="FILE" />
+		<appender-ref ref="Error" /> -->
 	</root> 
 	
 	<!-- 특정패키지 로깅레벨 설정 -->
