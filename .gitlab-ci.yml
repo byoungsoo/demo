@@ -1,0 +1,186 @@
+image: docker:stable
+variables:
+  DOCKER_DRIVER: overlay2
+  #Application
+  APPLICATION_GROUP: ${CI_APPLICATION_GROUP}
+  APPLICATION_NAME: ${CI_APPLICATION_NAME}
+  APP_NAME: ${CI_APP_NAME}
+  APPLICATION_NS: ${CI_APPLICATION_NS}
+  APPLICATION_PORT: 11010
+  ENVIRONMENT: ${CI_ENVIRONMENT}
+  
+  # AWS 
+  AWS_REGION: "ap-northeast-2"
+  REGISTRY_URL: 718652001716.dkr.ecr.ap-northeast-2.amazonaws.com
+ 
+stages:
+  - build
+  - package
+  - deploy
+  - deploycheck
+  - rollback
+
+maven-build:
+  image: maven:3.8.1-openjdk-11
+  stage: build
+  script:
+    
+    # Build
+    - mvn package
+
+  artifacts:
+    when: always
+    paths:
+      - build/
+    expire_in: 1 days
+
+  only:
+    - develop
+    - stage
+    - master
+
+
+docker-build:
+  stage: package
+  script:
+    # Env
+    - if [ "${CI_COMMIT_BRANCH}" == "develop" ]; then
+          export ENVIRONMENT="dev";
+          export JENNIFER_DOMAIN_ID="1011";
+      elif [ "${CI_COMMIT_BRANCH}" == "stage" ]; then
+          export ENVIRONMENT="stg";
+          export JENNIFER_DOMAIN_ID="1011";
+      elif [ "${CI_COMMIT_BRANCH}" == "master" ]; then
+          export ENVIRONMENT="prd";
+          export JENNIFER_DOMAIN_ID="1012";
+      fi
+    - echo ${ENVIRONMENT}
+    
+    # Change Variables <APPLICATION_NS>-<APP_NAME>
+    - sed -i "s/<APPLICATION_NS>/${APPLICATION_NS}/g" env/${ENVIRONMENT}/Dockerfile
+    - sed -i "s/<APP_NAME>/${APP_NAME}/g" env/${ENVIRONMENT}/Dockerfile
+    - sed -i "s/<APPLICATION_PORT>/${APPLICATION_PORT}/g" env/${ENVIRONMENT}/Dockerfile
+    - sed -i "s/<ENVIRONMENT>/${ENVIRONMENT}/g" env/${ENVIRONMENT}/Dockerfile
+
+    - sed -i "s/<JENNIFER_MANAGER_IP>/${JENNIFER_MANAGER_IP}/g" env/${ENVIRONMENT}/Dockerfile
+    - sed -i "s/<JENNIFER_MANAGER_PORT>/${JENNIFER_MANAGER_PORT}/g" env/${ENVIRONMENT}/Dockerfile
+    - sed -i "s/<JENNIFER_DOMAIN_ID>/${JENNIFER_DOMAIN_ID}/g" env/${ENVIRONMENT}/Dockerfile
+    
+    - sed -i "s/<APPLICATION_NS>/${APPLICATION_NS}/g" env/${ENVIRONMENT}/server.xml
+    - sed -i "s/<APP_NAME>/${APP_NAME}/g" env/${ENVIRONMENT}/server.xml
+    - sed -i "s/<APPLICATION_PORT>/${APPLICATION_PORT}/g" env/${ENVIRONMENT}/server.xml
+    
+    # Change Files
+    - cp env/${ENVIRONMENT}/Dockerfile Dockerfile
+
+    ### Docker Build
+    - docker build -t ${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA} .
+
+    # Assume Role
+    - *assume_role
+
+    # AWS ECR Login
+    - $(aws ecr get-login --no-include-email --region ${AWS_REGION})
+
+    ### Check Latest Image
+    - export IS_LATEST=`aws ecr describe-images --region ${AWS_REGION} --repository-name ${ENVIRONMENT}-${APPLICATION_NAME} --query imageDetails[].imageTags | grep ${APP_NAME}-latest | wc -l`
+    ### Docker Backup
+    - >
+     if [ "$IS_LATEST" == "1" ]; then
+       echo "Image Backup";
+       docker pull ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest;
+       docker tag ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-backup;
+       docker push ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-backup;
+       docker rmi ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest;
+     fi
+    
+    ### Docker Push into ECR
+    - docker tag ${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA} ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA}
+    - docker push ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA}
+
+    - docker tag ${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA} ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest
+    - docker push ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest
+
+    ### Docker Delete Images
+    - docker rmi ${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA}
+    - docker rmi ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA}
+    - docker rmi ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest
+    - docker rmi ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-backup
+
+  only:
+    - develop
+    - stage
+    - master
+
+  
+
+# Deploy
+deploy:
+  stage: deploy
+  image: ${REGISTRY_URL}/common/helm-deploy:latest
+  script:
+    # Env
+    - *eks-var-setting
+    
+    # Assume Role
+    - *assume_role
+    
+    # - aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}
+    
+    ## Change Variables
+    - *eks-var-sed
+
+    - helm upgrade -i --debug ${APP_NAME}-${ENVIRONMENT} ./helm/ -f ./helm/${HELM_VALUES_FILE}
+     -n ${APPLICATION_NS}
+     
+  only:
+    - develop
+    - stage
+    - master
+
+# Deploy-Check 
+deploycheck:
+  stage: deploycheck
+  image: ${REGISTRY_URL}/common/helm-deploy:latest
+  script:
+    # Env
+    - *eks-var-setting
+    
+    # Assume Role
+    - *assume_role
+    
+    # - aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}
+    
+    # Check Status
+    - kubectl rollout status deployment ${APP_NAME}-${ENVIRONMENT}-deploy -n ${APPLICATION_NS}
+
+  only:
+    - develop
+    - stage
+    - master
+
+
+# Deploy-Check 
+rollback:
+  stage: deploycheck
+  when: manual
+  image: ${REGISTRY_URL}/common/helm-deploy:latest
+  script:
+    # Env
+    - *eks-var-setting
+    # - aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}
+
+    # Assume Role
+    - *assume_role
+    
+    ## Change Variables
+    - *eks-var-sed
+
+    ## Deploy Backup
+    - helm upgrade -i --debug --set image.tag=${APP_NAME}-backup ${APP_NAME}-${ENVIRONMENT} ./helm/ -f ./helm/${HELM_VALUES_FILE}
+     -n ${APPLICATION_NS}
+  
+  only:
+    - develop
+    - stage
+    - master
