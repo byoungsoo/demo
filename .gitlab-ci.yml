@@ -43,19 +43,7 @@ maven-build:
 docker-build:
   stage: package
   script:
-    # Env
-    - if [ "${CI_COMMIT_BRANCH}" == "develop" ]; then
-          export ENVIRONMENT="dev";
-          export JENNIFER_DOMAIN_ID="1011";
-      elif [ "${CI_COMMIT_BRANCH}" == "stage" ]; then
-          export ENVIRONMENT="stg";
-          export JENNIFER_DOMAIN_ID="1011";
-      elif [ "${CI_COMMIT_BRANCH}" == "master" ]; then
-          export ENVIRONMENT="prd";
-          export JENNIFER_DOMAIN_ID="1012";
-      fi
-    - echo ${ENVIRONMENT}
-    
+
     # Change Variables <APPLICATION_NS>-<APP_NAME>
     - sed -i "s/<APPLICATION_NS>/${APPLICATION_NS}/g" env/${ENVIRONMENT}/Dockerfile
     - sed -i "s/<APP_NAME>/${APP_NAME}/g" env/${ENVIRONMENT}/Dockerfile
@@ -70,17 +58,9 @@ docker-build:
     - sed -i "s/<APP_NAME>/${APP_NAME}/g" env/${ENVIRONMENT}/server.xml
     - sed -i "s/<APPLICATION_PORT>/${APPLICATION_PORT}/g" env/${ENVIRONMENT}/server.xml
     
-    # Change Files
-    - cp env/${ENVIRONMENT}/Dockerfile Dockerfile
-
+    
     ### Docker Build
     - docker build -t ${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA} .
-
-    # Assume Role
-    - *assume_role
-
-    # AWS ECR Login
-    - $(aws ecr get-login --no-include-email --region ${AWS_REGION})
 
     ### Check Latest Image
     - export IS_LATEST=`aws ecr describe-images --region ${AWS_REGION} --repository-name ${ENVIRONMENT}-${APPLICATION_NAME} --query imageDetails[].imageTags | grep ${APP_NAME}-latest | wc -l`
@@ -119,17 +99,7 @@ deploy:
   stage: deploy
   image: ${REGISTRY_URL}/common/helm-deploy:latest
   script:
-    # Env
-    - *eks-var-setting
     
-    # Assume Role
-    - *assume_role
-    
-    # - aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}
-    
-    ## Change Variables
-    - *eks-var-sed
-
     - helm upgrade -i --debug ${APP_NAME}-${ENVIRONMENT} ./helm/ -f ./helm/${HELM_VALUES_FILE}
      -n ${APPLICATION_NS}
      
@@ -143,13 +113,6 @@ deploycheck:
   stage: deploycheck
   image: ${REGISTRY_URL}/common/helm-deploy:latest
   script:
-    # Env
-    - *eks-var-setting
-    
-    # Assume Role
-    - *assume_role
-    
-    # - aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}
     
     # Check Status
     - kubectl rollout status deployment ${APP_NAME}-${ENVIRONMENT}-deploy -n ${APPLICATION_NS}
@@ -166,16 +129,7 @@ rollback:
   when: manual
   image: ${REGISTRY_URL}/common/helm-deploy:latest
   script:
-    # Env
-    - *eks-var-setting
-    # - aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}
-
-    # Assume Role
-    - *assume_role
     
-    ## Change Variables
-    - *eks-var-sed
-
     ## Deploy Backup
     - helm upgrade -i --debug --set image.tag=${APP_NAME}-backup ${APP_NAME}-${ENVIRONMENT} ./helm/ -f ./helm/${HELM_VALUES_FILE}
      -n ${APPLICATION_NS}

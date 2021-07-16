@@ -9,11 +9,11 @@
 		<version>2.4.2</version>
 		<relativePath /> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.example</groupId>
-	<artifactId>SampleDemo</artifactId>
+	<groupId>com.bys</groupId>
+	<artifactId>board</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>SampleDemo</name>
-	<description>Demo project for Spring Boot</description>
+	<name>board</name>
+	<description>project for Spring Boot</description>
 
 	<properties>
 		<java.version>11</java.version>
@@ -63,9 +63,11 @@
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 		</dependency>
-
-
-
+		<dependency>
+		    <groupId>org.apache.maven.plugins</groupId>
+		    <artifactId>maven-install-plugin</artifactId>
+		    <version>2.5.2</version>
+		</dependency>
 	</dependencies>
 
 	<build>
