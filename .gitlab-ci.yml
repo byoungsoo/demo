@@ -2,10 +2,9 @@ image: docker:stable
 variables:
   DOCKER_DRIVER: overlay2
   #Application
-  APPLICATION_NAME: bys-msa
   APP_NAME: board
   APPLICATION_NS: smp
-  APPLICATION_PORT: 8090
+  APPLICATION_PORT: 8080
   
   # AWS 
   AWS_REGION: "ap-northeast-2"
@@ -22,7 +21,7 @@ maven-build:
   image: maven:3.8.1-openjdk-11
   stage: build
   script:
-    
+
     # Build
     - mvn package
 
@@ -38,59 +37,49 @@ maven-build:
     - master
 
 
+.chceck_repo:
+  script:
+    
+    - $(aws ecr get-login --no-include-email --region ${AWS_REGION})
+    - export IS_REPO=`aws ecr describe-repositories --region ${AWS_REGION} --query "repositories[].repositoryName" | grep ${APP_NAME} | wc -l`
+
+    - >
+     if [ "$IS_REPO" == "0" ]; then
+       aws ecr create-repository --repository-name ${APP_NAME} --region ${AWS_REGION}
+     fi
+
+
+
 docker-build:
   stage: package
   script:
 
-    # Change Variables <APPLICATION_NS>-<APP_NAME>
-    - sed -i "s/<APPLICATION_NS>/${APPLICATION_NS}/g" env/${ENVIRONMENT}/Dockerfile
-    - sed -i "s/<APP_NAME>/${APP_NAME}/g" env/${ENVIRONMENT}/Dockerfile
-    - sed -i "s/<APPLICATION_PORT>/${APPLICATION_PORT}/g" env/${ENVIRONMENT}/Dockerfile
-    - sed -i "s/<ENVIRONMENT>/${ENVIRONMENT}/g" env/${ENVIRONMENT}/Dockerfile
+    # Change Variables
+    - sed -i "s/<APP_NAME>/${APP_NAME}/g" Dockerfile
+    - sed -i "s/<APP_NAME>/${APP_NAME}/g" cicd/tomcat/server.xml
 
-    - sed -i "s/<JENNIFER_MANAGER_IP>/${JENNIFER_MANAGER_IP}/g" env/${ENVIRONMENT}/Dockerfile
-    - sed -i "s/<JENNIFER_MANAGER_PORT>/${JENNIFER_MANAGER_PORT}/g" env/${ENVIRONMENT}/Dockerfile
-    - sed -i "s/<JENNIFER_DOMAIN_ID>/${JENNIFER_DOMAIN_ID}/g" env/${ENVIRONMENT}/Dockerfile
-    
-    - sed -i "s/<APPLICATION_NS>/${APPLICATION_NS}/g" env/${ENVIRONMENT}/server.xml
-    - sed -i "s/<APP_NAME>/${APP_NAME}/g" env/${ENVIRONMENT}/server.xml
-    - sed -i "s/<APPLICATION_PORT>/${APPLICATION_PORT}/g" env/${ENVIRONMENT}/server.xml
-    
-    
+    - *chceck_repo
+  
     ### Docker Build
-    - docker build -t ${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA} .
+    - docker build -t ${APP_NAME}:${CI_COMMIT_SHORT_SHA} .
 
-    ### Check Latest Image
-    - export IS_LATEST=`aws ecr describe-images --region ${AWS_REGION} --repository-name ${ENVIRONMENT}-${APPLICATION_NAME} --query imageDetails[].imageTags | grep ${APP_NAME}-latest | wc -l`
-    ### Docker Backup
-    - >
-     if [ "$IS_LATEST" == "1" ]; then
-       echo "Image Backup";
-       docker pull ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest;
-       docker tag ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-backup;
-       docker push ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-backup;
-       docker rmi ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest;
-     fi
-    
     ### Docker Push into ECR
-    - docker tag ${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA} ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA}
-    - docker push ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA}
+    - docker tag ${APP_NAME}:${CI_COMMIT_SHORT_SHA} ${REGISTRY_URL}/${APP_NAME}:${CI_COMMIT_SHORT_SHA}
+    - docker push ${REGISTRY_URL}/${APP_NAME}:${CI_COMMIT_SHORT_SHA}
 
-    - docker tag ${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA} ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest
-    - docker push ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest
+    - docker tag ${APP_NAME}:${CI_COMMIT_SHORT_SHA} ${REGISTRY_URL}/${APP_NAME}:latest
+    - docker push ${REGISTRY_URL}/${APP_NAME}:latest
 
     ### Docker Delete Images
-    - docker rmi ${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA}
-    - docker rmi ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${CI_COMMIT_SHORT_SHA}
-    - docker rmi ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-latest
-    - docker rmi ${REGISTRY_URL}/${ENVIRONMENT}-${APPLICATION_NAME}:${APP_NAME}-backup
+    - docker rmi ${APP_NAME}:${CI_COMMIT_SHORT_SHA}
+    - docker rmi ${REGISTRY_URL}/${APP_NAME}:${CI_COMMIT_SHORT_SHA}
+    - docker rmi ${REGISTRY_URL}/${APP_NAME}:latest
 
   only:
     - develop
     - stage
     - master
 
-  
 
 # Deploy
 deploy:
@@ -98,7 +87,13 @@ deploy:
   image: ${REGISTRY_URL}/common/helm-deploy:latest
   script:
     
-    - helm upgrade -i --debug ${APP_NAME}-${ENVIRONMENT} ./helm/ -f ./helm/${HELM_VALUES_FILE}
+    - sed -i "s/<REGISTRY_URL>/${APP_NAME}/g" helm/values.yaml
+    - sed -i "s/<APP_NAME>/${APP_NAME}/g" helm/values.yaml
+    - sed -i "s/<CI_COMMIT_SHORT_SHA>/${CI_COMMIT_SHORT_SHA}/g" helm/values.yaml
+
+    - sed -i "s/<APP_NAME>/${APP_NAME}/g" helm/Chart.yaml
+    
+    - helm upgrade -i --debug ${APP_NAME} ./helm/ -f ./helm/values.yaml
      -n ${APPLICATION_NS}
      
   only:
@@ -113,7 +108,7 @@ deploycheck:
   script:
     
     # Check Status
-    - kubectl rollout status deployment ${APP_NAME}-${ENVIRONMENT}-deploy -n ${APPLICATION_NS}
+    - kubectl rollout status deployment ${APP_NAME} -n ${APPLICATION_NS}
 
   only:
     - develop
@@ -129,7 +124,7 @@ rollback:
   script:
     
     ## Deploy Backup
-    - helm upgrade -i --debug --set image.tag=${APP_NAME}-backup ${APP_NAME}-${ENVIRONMENT} ./helm/ -f ./helm/${HELM_VALUES_FILE}
+    - helm upgrade -i --debug --set image.tag=${APP_NAME}-backup ${APP_NAME} ./helm/ -f ./helm/${HELM_VALUES_FILE}
      -n ${APPLICATION_NS}
   
   only:

@@ -1,0 +1,112 @@
+############ Common ############
+
+############ Deployment.yaml ############
+deployment:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+replicaCount: 1
+
+imagePullSecrets: []
+
+image:
+  repository: "<REGISTRY_URL>/<APP_NAME>"
+  tag: "<CI_COMMIT_SHORT_SHA>"
+  pullPolicy: Always
+
+containerPort: 8080
+
+resources:
+  requests:
+    cpu: 800m
+    memory: 1536Mi
+  limits:
+    cpu: 1600m
+    memory: 1536Mi
+
+nameOverride: ""
+fullnameOverride: ""
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 99
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                  - key: "app.kubernetes.io/name"
+                    operator: In
+                    values:
+                    - <APP_NAME>
+                topologyKey: "kubernetes.io/hostname"
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                  - key: "app.kubernetes.io/name"
+                    operator: In
+                    values:
+                    - <APP_NAME>
+                topologyKey: "failure-domain.beta.kubernetes.io/zone"
+
+
+############ service.yaml ############
+service:
+  type: ClusterIP
+  port: 8080
+
+
+############ ingress.yaml ############
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/group.name: smp
+    alb.ingress.kubernetes.io/subnets: SMP-DEV-SBN-AZ1-DMZ, SMP-DEV-SBN-AZ2-DMZ
+    alb.ingress.kubernetes.io/scheme : internal
+    alb.ingress.kubernetes.io/security-groups: SMP-DEV-SG-EKSALB-1
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /<APP_NAME>/
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '15'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '10'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '4'
+    alb.ingress.kubernetes.io/success-codes: '200'
+    alb.ingress.kubernetes.io/target-type: ip
+  rules:
+    - http:
+        paths:
+        - path: /<APP_NAME>
+          pathType: Prefix
+          backend:
+            service:
+              name: <APP_NAME>
+              port:
+                number: 8080
+  tls: []
+  
+
+############ hpa.yaml ############
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+############ serviceaccount.yaml ############
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
