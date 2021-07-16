@@ -2,7 +2,7 @@
 apiVersion: autoscaling/v2beta2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: "{{ include "mychart.fullname" . }}-autoscaler"
+  name: "{{ include "mychart.fullname" . }}"
   labels:
     {{- include "mychart.labels" . | nindent 4 }}
 spec:
