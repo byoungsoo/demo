@@ -2,12 +2,10 @@ image: docker:stable
 variables:
   DOCKER_DRIVER: overlay2
   #Application
-  APPLICATION_GROUP: ${CI_APPLICATION_GROUP}
-  APPLICATION_NAME: ${CI_APPLICATION_NAME}
-  APP_NAME: ${CI_APP_NAME}
-  APPLICATION_NS: ${CI_APPLICATION_NS}
-  APPLICATION_PORT: 11010
-  ENVIRONMENT: ${CI_ENVIRONMENT}
+  APPLICATION_NAME: bys-msa
+  APP_NAME: board
+  APPLICATION_NS: smp
+  APPLICATION_PORT: 8090
   
   # AWS 
   AWS_REGION: "ap-northeast-2"
@@ -31,7 +29,7 @@ maven-build:
   artifacts:
     when: always
     paths:
-      - build/
+      - target/
     expire_in: 1 days
 
   only:
