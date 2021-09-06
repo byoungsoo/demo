@@ -1,8 +1,8 @@
-image: docker:stable
+image: 718652001716.dkr.ecr.ap-northeast-2.amazonaws.com/common:docker-stable
 variables:
   DOCKER_DRIVER: overlay2
   #Application
-  APP_NAME: board
+  APP_NAME: "board"
   APPLICATION_NS: smp
   APPLICATION_PORT: 8080
   
@@ -18,20 +18,17 @@ stages:
   - rollback
 
 .template_chceck_repo: &check_repo
-  script:
     - $(aws ecr get-login --no-include-email --region ${AWS_REGION})
     - export IS_REPO=`aws ecr describe-repositories --region ${AWS_REGION} --query "repositories[].repositoryName" | grep ${APP_NAME} | wc -l`
-
     - >
      if [ "$IS_REPO" == "0" ]; then
        aws ecr create-repository --repository-name ${APP_NAME} --region ${AWS_REGION}
      fi
 
 maven-build:
-  image: maven:3.8.1-openjdk-11
+  image: 718652001716.dkr.ecr.ap-northeast-2.amazonaws.com/common:maven-3.8.1
   stage: build
   script:
-
     # Build
     - mvn package
 
@@ -53,8 +50,8 @@ docker-build:
 
     # Change Variables
     - sed -i "s/<APP_NAME>/${APP_NAME}/g" Dockerfile
-    - sed -i "s/<APP_NAME>/${APP_NAME}/g" cicd/tomcat/server.xml
-
+    - sed -i "s/<APP_NAME>/${APP_NAME}/g" docker-entrypoint.sh
+    
     - *check_repo
   
     ### Docker Build
